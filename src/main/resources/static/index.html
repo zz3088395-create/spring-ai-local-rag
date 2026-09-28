@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地助手</title>
+<style>
+  :root {
+    --bg: #eef1f4;
+    --panel: #ffffff;
+    --ink: #17202a;
+    --muted: #667085;
+    --line: #d9dee5;
+    --accent: #1d5c63;
+    --accent-soft: #dcebea;
+    --warn: #9a3412;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
+    height: 100%;
+    padding: 16px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .chat { padding: 0; }
+  .chat header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .chat header h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  .chat header span { color: var(--muted); font-size: 13px; }
+  .chat header button { margin-left: auto; }
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .msg { max-width: 78ch; white-space: pre-wrap; word-break: break-word; }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--accent-soft);
+    padding: 10px 14px;
+    border-radius: 10px 10px 2px 10px;
+  }
+  .msg.assistant { align-self: flex-start; padding: 2px 0; }
+  .msg.assistant.streaming::after {
+    content: "";
+    display: inline-block;
+    width: 8px; height: 15px;
+    margin-left: 2px;
+    vertical-align: -2px;
+    background: var(--accent);
+    animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .msg.assistant.streaming::after { animation: none; } }
+  .msg.error { color: var(--warn); }
+  .empty { color: var(--muted); max-width: 60ch; }
+  .composer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .composer textarea {
+    flex: 1;
+    resize: none;
+    min-height: 44px;
+    max-height: 160px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    font: inherit;
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .side { overflow-y: auto; padding: 0; }
+  .side section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .side section:last-child { border-bottom: 0; }
+  .side h2 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+  .side p { margin: 0; color: var(--muted); font-size: 14px; }
+  .side .summary { color: var(--ink); white-space: pre-wrap; }
+  .stat { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-top: 6px; }
+  .stat b { color: var(--ink); font-weight: 600; }
+  .source { border-left: 3px solid var(--accent); padding: 6px 10px; margin-top: 8px; font-size: 13.5px; }
+  .source .meta { color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .source .text { white-space: pre-wrap; max-height: 7.5em; overflow: hidden; }
+  .ingest input, .ingest textarea {
+    width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px;
+  }
+  .ingest textarea { min-height: 90px; resize: vertical; }
+  .ingest .row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .ingest .row p { flex: 1; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+    .side { max-height: 40vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="panel chat">
+    <header>
+      <h1>本地助手</h1>
+      <span id="model">Ollama · localhost:11434</span>
+      <button id="reset" type="button">新对话</button>
+    </header>
+    <div class="messages" id="messages">
+      <p class="empty">所有东西都在这台机器上运行。可以问这个项目本身，也可以把自己的笔记粘进右侧知识库再问。连续聊超过十二条消息，右侧记忆面板会把历史压缩成摘要。</p>
+    </div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="问点什么…" autofocus></textarea>
+      <button class="primary" id="send" type="submit">发送</button>
+    </form>
+  </div>
+
+  <aside class="panel side">
+    <section>
+      <h2>它记住了什么</h2>
+      <p class="summary" id="summary">还没有摘要。最近六条消息按原文发送，更早的会在这里折叠成摘要。</p>
+      <div class="stat"><span>提示词中的原文消息</span><b id="recentCount">0</b></div>
+      <div class="stat"><span>已压缩次数</span><b id="compressions">0</b></div>
+    </section>
+    <section>
+      <h2>上一次回答用到的片段</h2>
+      <div id="sources"><p>还没有检索。</p></div>
+    </section>
+    <section class="ingest">
+      <h2>知识库</h2>
+      <div class="stat"><span>已索引片段</span><b id="chunkCount">–</b></div>
+      <input id="sourceName" placeholder="来源名称，例如 notes.md">
+      <textarea id="sourceText" placeholder="粘贴要索引的文本。会按段落切块、用 bge-m3 向量化，再按余弦相似度检索。"></textarea>
+      <div class="row">
+        <p id="ingestStatus"></p>
+        <button id="ingest" type="button">加入知识库</button>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<script>
+  let sessionId = crypto.randomUUID();
+  let busy = false;
+
+  const $ = (id) => document.getElementById(id);
+  const messages = $('messages');
+  const input = $('input');
+
+  // qwen3 有时会先吐一段 <think>…</think>，藏掉
+  const visible = (raw) => raw.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/^<think>[\s\S]*$/, '');
+
+  function addMessage(role, text) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + role;
+    el.textContent = text;
+    messages.appendChild(el);
+    messages.scrollTop = messages.scrollHeight;
+    return el;
+  }
+
+  function renderSources(list) {
+    const box = $('sources');
+    if (!list || list.length === 0) {
+      box.innerHTML = '<p>没有片段的相关度超过阈值，模型是用自身知识回答的。</p>';
+      return;
+    }
+    box.innerHTML = '';
+    for (const s of list) {
+      const el = document.createElement('div');
+      el.className = 'source';
+      el.innerHTML = '<div class="meta"><span></span><span></span></div><div class="text"></div>';
+      el.querySelector('.meta span:first-child').textContent = s.source;
+      el.querySelector('.meta span:last-child').textContent = '相关度 ' + s.score;
+      el.querySelector('.text').textContent = s.text;
+      box.appendChild(el);
+    }
+  }
+
+  async function refreshMemory() {
+    const r = await fetch('/api/chat/memory?sessionId=' + encodeURIComponent(sessionId));
+    if (!r.ok) return;
+    const m = await r.json();
+    $('summary').textContent = m.summary && m.summary.trim()
+      ? m.summary
+      : '还没有摘要。最近六条消息按原文发送，更早的会在这里折叠成摘要。';
+    $('recentCount').textContent = m.recent.length;
+    $('compressions').textContent = m.compressions;
+  }
+
+  async function refreshStats() {
+    const r = await fetch('/api/rag/stats');
+    if (r.ok) $('chunkCount').textContent = (await r.json()).chunks;
+  }
+
+  function send() {
+    const q = input.value.trim();
+    if (!q || busy) return;
+    busy = true; $('send').disabled = true;
+    input.value = '';
+    messages.querySelector('.empty')?.remove();
+    addMessage('user', q);
+    const bubble = addMessage('assistant', '');
+    bubble.classList.add('streaming');
+
+    let raw = '';
+    const es = new EventSource('/api/chat/stream?sessionId=' + encodeURIComponent(sessionId) + '&q=' + encodeURIComponent(q));
+    const finish = () => {
+      es.close();
+      bubble.classList.remove('streaming');
+      busy = false; $('send').disabled = false;
+      input.focus();
+      // 压缩是回答完之后后台跑的，过几秒再刷一次面板
+      refreshMemory();
+      setTimeout(refreshMemory, 4000);
+    };
+    es.onmessage = (e) => {
+      const ev = JSON.parse(e.data);
+      if (ev.sources) renderSources(ev.sources);
+      if (ev.delta) { raw += ev.delta; bubble.textContent = visible(raw); messages.scrollTop = messages.scrollHeight; }
+      if (ev.error) { bubble.classList.add('error'); bubble.textContent = '模型调用失败：' + ev.error + '。请确认 Ollama 在运行，且 application.yml 里的模型已拉取。'; finish(); }
+      if (ev.done) finish();
+    };
+    es.onerror = () => {
+      if (!raw) { bubble.classList.add('error'); bubble.textContent = '与服务器的连接断开了。'; }
+      finish();
+    };
+  }
+
+  $('composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(160, input.scrollHeight) + 'px'; });
+
+  $('reset').addEventListener('click', async () => {
+    await fetch('/api/chat/memory?sessionId=' + encodeURIComponent(sessionId), { method: 'DELETE' });
+    sessionId = crypto.randomUUID();
+    messages.innerHTML = '<p class="empty">新对话。记忆和摘要从空开始，知识库保留。</p>';
+    renderSources(null);
+    refreshMemory();
+  });
+
+  $('ingest').addEventListener('click', async () => {
+    const text = $('sourceText').value.trim();
+    if (!text) { $('ingestStatus').textContent = '请先粘贴一些文本。'; return; }
+    $('ingest').disabled = true;
+    $('ingestStatus').textContent = '向量化中…';
+    const r = await fetch('/api/rag/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: $('sourceName').value.trim() || 'manual', text })
+    });
+    $('ingest').disabled = false;
+    if (!r.ok) { $('ingestStatus').textContent = '索引失败（' + r.status + '）。'; return; }
+    const res = await r.json();
+    $('ingestStatus').textContent = '已加入 ' + res.chunks + ' 个片段。';
+    $('sourceText').value = '';
+    refreshStats();
+  });
+
+  refreshMemory();
+  refreshStats();
+</script>
+</body>
+</html>

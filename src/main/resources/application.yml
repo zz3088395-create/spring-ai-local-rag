@@ -1,0 +1,38 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-ai-local-rag
+  ai:
+    model:
+      chat: ollama
+      embedding: ollama
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          #模型名
+          model: qwen3:14b
+          temperature: 0.7
+      embedding:
+        options:
+          # 知识库
+          model: bge-m3
+
+app:
+  rag:
+    chunk-size: 400
+    chunk-overlap: 60
+    top-k: 3
+    # 相似度阈值，搜不到东西就调低
+    min-score: 0.30
+  memory:
+    # 最近几条原文保留，一问一答算两条
+    max-recent: 6
+    # 攒够这么多再压一次
+    compress-batch: 6
+
+logging:
+  level:
+    com.zhiliang.airag: INFO
